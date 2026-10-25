@@ -6,7 +6,7 @@ Support portal with author + admin interfaces. AI-assisted triage and drafting v
 
 ## Stack & Setup
 
-**Stack:** React 18 + Vite · Redux Toolkit / RTK Query · Node 20 + Express · Supabase (Postgres + Auth + Realtime) · Groq (Llama 3.1 8B Instant + 3.3 70B Versatile)
+**Stack:** React 18 + Vite · Redux Toolkit / RTK Query · Node 20 + Express · Supabase (Postgres + Auth + Realtime) · Groq (GPT-OSS 20B + 120B)
 
 ```bash
 # 1. Create Supabase project → run backend/db/schema.sql in SQL editor

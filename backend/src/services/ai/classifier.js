@@ -2,7 +2,6 @@ import { callGroq } from './groq.js';
 import { CATEGORIES } from './knowledgeBase.js';
 import { breakers } from './circuitBreaker.js';
 import { config } from '../../config.js';
-import { supabaseAdmin } from '../../supabase.js';
 
 const KEYWORD_RULES = [
   { cat: 'ISBN & Metadata Issues', re: /\b(isbn|metadata|wrong book|duplicate isbn)\b/i, prio: 'High' },
@@ -42,38 +41,35 @@ Priority guidance:
 Respond with ONLY valid JSON:
 {"category": "<category>", "priority": "Critical|High|Medium|Low", "reason": "<one sentence>"}`;
 
-export async function classifyTicket({ subject, description, ticketId }) {
+export async function classifyTicket({ subject, description }) {
   // Cost optimization: only first 500 chars of description.
   const excerpt = description.slice(0, 500);
 
   if (!breakers.classify.canCall()) {
-    const r = { ...keywordClassify(subject, description), source: 'circuit_open_fallback' };
-    logUsage({ ticketId, capability: 'classify', success: false, errorType: 'circuit_open' });
-    return r;
+    return { ...keywordClassify(subject, description), source: 'circuit_open_fallback' };
   }
 
-  const started = Date.now();
   try {
-      const { content, usage, model } = await callGroq({
-        model: config.groq.classifyModel,
-        maxTokens: 150,
-        temperature: 0.1,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `Subject: ${subject}\n\nDescription: ${excerpt}` },
-        ],
-      });
+    const { content } = await callGroq({
+      model: config.groq.classifyModel,
+      maxTokens: 512,
+      temperature: 0.1,
+      reasoningEffort: 'low',
+      hideReasoning: true,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: `Subject: ${subject}\n\nDescription: ${excerpt}` },
+      ],
+    });
 
     const parsed = safeParseJson(content);
     if (!parsed || !CATEGORIES.includes(parsed.category) || !parsed.priority) {
       const e = new Error('Bad classification output'); e.code = 'bad_output'; e.transient = false; throw e;
     }
     breakers.classify.recordSuccess();
-    logUsage({ ticketId, capability: 'classify', model, usage, success: true, latencyMs: Date.now() - started });
     return { category: parsed.category, priority: parsed.priority, reason: parsed.reason, source: 'ai' };
   } catch (e) {
     breakers.classify.recordFailure(e.transient !== false);
-    logUsage({ ticketId, capability: 'classify', model: config.groq.classifyModel, success: false, errorType: e.code || 'unknown', latencyMs: Date.now() - started });
     console.warn('[classify] fallback:', e.message);
     return { ...keywordClassify(subject, description), source: 'ai_error_fallback' };
   }
@@ -84,10 +80,4 @@ function safeParseJson(s) {
   const m = s.match(/\{[\s\S]*\}/);
   if (!m) return null;
   try { return JSON.parse(m[0]); } catch { return null; }
-}
-
-function logUsage(row) {
-  supabaseAdmin.from('ai_usage').insert(row).then(({ error }) => {
-    if (error) console.warn('[ai_usage]', error.message);
-  });
 }

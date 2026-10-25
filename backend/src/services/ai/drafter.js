@@ -2,7 +2,6 @@ import { callGroq } from './groq.js';
 import { kbForCategory, KB } from './knowledgeBase.js';
 import { breakers } from './circuitBreaker.js';
 import { config } from '../../config.js';
-import { supabaseAdmin } from '../../supabase.js';
 
 const TEMPLATES = {
   'Royalty & Payments': (a, b) => `Hi ${a},\n\nThank you for reaching out about your royalties for ${b}. Royalties are calculated quarterly and paid within 45 days of the quarter ending (payouts go via bank transfer to the account linked in your dashboard; minimum threshold ₹1,000).\n\nOur team is checking your royalty ledger and will follow up within 48 hours with a specific breakdown and next payout date.\n\nWarm regards,\nBookLeaf Support`,
@@ -60,33 +59,32 @@ ${ticket.description.slice(0, 1500)}
 Write the reply. Sign off as "Warm regards,\\nBookLeaf Support".
 Under 180 words. Plain prose — no headings or bullet symbols.`;
 
-  const started = Date.now();
   try {
-    const { content, usage, model } = await callGroq({
+    const { content, finishReason } = await callGroq({
       model: config.groq.draftModel,
-      maxTokens: 400,
+      maxTokens: 1200,
       temperature: 0.4,
+      reasoningEffort: 'low',
+      hideReasoning: true,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
     });
+    if (!content.trim() || finishReason === 'length') {
+      const error = new Error(finishReason === 'length' ? 'Groq draft reached the token limit' : 'Groq returned an empty draft');
+      error.code = 'incomplete_response';
+      error.transient = false;
+      throw error;
+    }
     breakers.draft.recordSuccess();
-    logUsage({ ticketId: ticket.id, capability: 'draft', model, usage, success: true, latencyMs: Date.now() - started });
     return { text: content.trim(), source: 'ai' };
   } catch (e) {
     breakers.draft.recordFailure(e.transient !== false);
-    logUsage({ ticketId: ticket.id, capability: 'draft', model: config.groq.draftModel, success: false, errorType: e.code || 'unknown', latencyMs: Date.now() - started });
     console.warn('[draft] fallback:', e.message);
     return {
       text: templateDraft({ authorName: author?.name, bookTitle: book?.title, category }),
       source: 'template',
     };
   }
-}
-
-function logUsage(row) {
-  supabaseAdmin.from('ai_usage').insert(row).then(({ error }) => {
-    if (error) console.warn('[ai_usage]', error.message);
-  });
 }

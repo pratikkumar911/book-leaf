@@ -1,11 +1,20 @@
 import { config } from '../../config.js';
 
 // Groq exposes an OpenAI-compatible /chat/completions endpoint.
-export async function callGroq({ model, messages, maxTokens = 400, temperature = 0.3, timeoutMs = config.groq.timeoutMs }) {
+export async function callGroq({
+  model,
+  messages,
+  maxTokens = 400,
+  temperature = 0.3,
+  reasoningEffort,
+  hideReasoning = false,
+  timeoutMs = config.groq.timeoutMs,
+}) {
   if (!config.groq.apiKey) {
     const e = new Error('GROQ_API_KEY not set'); e.code = 'no_api_key'; e.transient = false; throw e;
   }
 
+  const supportsGptOssReasoning = model.startsWith('openai/gpt-oss-');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
@@ -17,7 +26,14 @@ export async function callGroq({ model, messages, maxTokens = 400, temperature =
         'Content-Type': 'application/json',
         Authorization: `Bearer ${config.groq.apiKey}`,
       },
-      body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens }),
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        max_completion_tokens: maxTokens,
+        ...(supportsGptOssReasoning && reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+        ...(supportsGptOssReasoning && hideReasoning ? { reasoning_format: 'hidden' } : {}),
+      }),
       signal: ctrl.signal,
     });
   } catch (e) {
@@ -61,5 +77,6 @@ export async function callGroq({ model, messages, maxTokens = 400, temperature =
     content: json.choices?.[0]?.message?.content ?? '',
     usage: json.usage || {},
     model: json.model || model,
+    finishReason: json.choices?.[0]?.finish_reason,
   };
 }
