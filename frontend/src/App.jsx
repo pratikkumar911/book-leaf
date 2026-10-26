@@ -10,8 +10,11 @@ import AdminQueue from './pages/admin/AdminQueue.jsx';
 import AdminTicketDetail from './pages/admin/TicketDetail.jsx';
 
 export default function App() {
-  const { user, loading } = useAuth();
+  const { user, loading, authError } = useAuth();
   if (loading) return <div style={{ padding: 40 }}>Loading…</div>;
+  if (authError) return <div role="alert" style={{ padding: 40, color: '#dc2626' }}>
+    Unable to verify your session: {authError}. Please reload the page.
+  </div>;
   if (!user) return <Routes><Route path="*" element={<Login />} /></Routes>;
 
   const isAdmin = user.role === 'admin';

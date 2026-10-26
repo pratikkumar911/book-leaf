@@ -1,55 +1,12 @@
-import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { supabase } from '../../supabaseClient.js';
-import { bookleafApi, useGetTicketQuery } from '../../store/api.js';
+import { useGetTicketQuery } from '../../store/api.js';
 
 export default function TicketDetail() {
   const { id } = useParams();
-  const dispatch = useDispatch();
-
-  // UI-only, ephemeral state — connection status for the "live / reconnecting" indicator.
-  // Not server state, so it doesn't belong in the Redux cache.
-  const [rtStatus, setRtStatus] = useState('connecting');
-
-  // Polling fallback: if Realtime drops silently, we still refresh every 30s.
-  // RTK Query pauses polling when the tab is hidden and resumes on focus — good default.
   const { data: ticket, isLoading, error } = useGetTicketQuery(id, {
-    pollingInterval: 30000,
-    refetchOnMountOrArgChange: true,   // admin may have replied since last visit
+    pollingInterval: 10000,
+    refetchOnMountOrArgChange: true,
   });
-
-  // Supabase Realtime → invalidate RTK Query cache → UI re-renders instantly.
-  useEffect(() => {
-    const channel = supabase
-      .channel(`author-ticket-${id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'ticket_messages', filter: `ticket_id=eq.${id}` },
-        () => dispatch(bookleafApi.util.invalidateTags([{ type: 'Ticket', id }]))
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'tickets', filter: `id=eq.${id}` },
-        () =>
-          dispatch(
-            bookleafApi.util.invalidateTags([
-              { type: 'Ticket', id },
-              'TicketList',   // status may have flipped Open → In Progress
-            ])
-          )
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') setRtStatus('live');
-        else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status))
-          setRtStatus('reconnecting');
-        else setRtStatus(status.toLowerCase());
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [id, dispatch]);
 
   if (isLoading) {
     return <div style={{ color: '#64748b' }}>Loading ticket…</div>;
@@ -113,20 +70,8 @@ export default function TicketDetail() {
             <span style={statusBadge(ticket.status)}>{ticket.status}</span>
           </div>
         </div>
-        <div
-          style={{
-            fontSize: 12,
-            whiteSpace: 'nowrap',
-            paddingTop: 4,
-            color: rtStatus === 'live' ? '#047857' : '#b45309',
-          }}
-          title={
-            rtStatus === 'live'
-              ? 'Connected via Supabase Realtime'
-              : 'Realtime unavailable — falling back to 30s polling'
-          }
-        >
-          {rtStatus === 'live' ? '● live' : `● ${rtStatus}`}
+        <div style={{ fontSize: 12, whiteSpace: 'nowrap', paddingTop: 4, color: '#64748b' }}>
+          Auto-refreshes every 10 seconds
         </div>
       </div>
 

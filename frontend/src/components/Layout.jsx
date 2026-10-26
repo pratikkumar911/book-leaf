@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext.jsx';
 
@@ -5,7 +6,18 @@ export default function Layout({ children }) {
   const { user, logout } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
+  const [logoutError, setLogoutError] = useState('');
   const isAdmin = user?.role === 'admin';
+  async function handleLogout() {
+    setLogoutError('');
+    try {
+      await logout();
+      nav('/');
+    } catch (error) {
+      setLogoutError(error.message);
+    }
+  }
+
   const nav_link = (path) => ({
     padding: '8px 14px', borderRadius: 6, textDecoration: 'none',
     background: loc.pathname === path ? '#eef2ff' : 'transparent',
@@ -27,7 +39,8 @@ export default function Layout({ children }) {
         </nav>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ color: '#64748b', fontSize: 14 }}>{user?.email} · {user?.role}</span>
-          <button onClick={() => { logout(); nav('/'); }} style={{ padding: '6px 12px' }}>Log out</button>
+          {logoutError && <span role="alert" style={{ color: '#dc2626', fontSize: 13 }}>{logoutError}</span>}
+          <button onClick={handleLogout} style={{ padding: '6px 12px' }}>Log out</button>
         </div>
       </header>
       <main style={{ maxWidth: 1100, margin: '24px auto', padding: '0 24px' }}>{children}</main>

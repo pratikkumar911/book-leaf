@@ -10,8 +10,16 @@ import ticketRoutes from './routes/tickets.js';
 import adminRoutes from './routes/admin.js';
 
 const app = express();
+const allowedFrontendOrigin = new URL(config.frontendOrigin).origin;
 app.use(helmet());
-app.use(cors({ origin: config.frontendOrigin, credentials: true }));
+app.use(cors({ origin: allowedFrontendOrigin, credentials: true }));
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (req.get('Origin') !== allowedFrontendOrigin) {
+    return res.status(403).json({ error: 'Untrusted request origin' });
+  }
+  next();
+});
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('tiny'));
 

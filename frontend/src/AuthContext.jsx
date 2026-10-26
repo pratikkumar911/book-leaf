@@ -1,40 +1,42 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { useDispatch } from 'react-redux';
 import { api } from './api.js';
-import { supabase } from './supabaseClient.js';
+import { bookleafApi } from './store/api.js';
 
 const Ctx = createContext(null);
 
 export function AuthProvider({ children }) {
+    const dispatch = useDispatch();
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [authError, setAuthError] = useState(null);
 
     useEffect(() => {
-        const token = localStorage.getItem('bl_token');
-        if (!token) { setLoading(false); return; }
-        supabase.realtime.setAuth(token);
+        localStorage.removeItem('bl_token');
+        localStorage.removeItem('bl_refresh');
         api.me().then(setUser)
-            .catch(() => localStorage.removeItem('bl_token'))
+            .catch((error) => {
+                if (error.status !== 401) setAuthError(error.message);
+            })
             .finally(() => setLoading(false));
     }, []);
 
     async function login(email, password) {
-        const res = await api.login(email, password);
-        localStorage.setItem('bl_token', res.access_token);
-        localStorage.setItem('bl_refresh', res.refresh_token);
-        supabase.realtime.setAuth(res.access_token);
+        setAuthError(null);
+        await api.login(email, password);
         const me = await api.me();
+        dispatch(bookleafApi.util.resetApiState());
         setUser(me);
         return me;
     }
 
-    function logout() {
-        localStorage.removeItem('bl_token');
-        localStorage.removeItem('bl_refresh');
-        supabase.realtime.setAuth(null);
+    async function logout() {
+        await api.logout();
+        dispatch(bookleafApi.util.resetApiState());
         setUser(null);
     }
 
-    return <Ctx.Provider value={{ user, loading, login, logout }}>{children}</Ctx.Provider>;
+    return <Ctx.Provider value={{ user, loading, authError, login, logout }}>{children}</Ctx.Provider>;
 }
 
 export const useAuth = () => useContext(Ctx);

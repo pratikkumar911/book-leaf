@@ -1,10 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { supabase } from '../../supabaseClient.js';
 import { useAuth } from '../../AuthContext.jsx';
 import {
-  bookleafApi,
   useGetAdminTicketQuery,
   useUpdateTicketMutation,
   useReplyTicketMutation,
@@ -25,7 +22,6 @@ const STATUSES = ['Open', 'In Progress', 'Resolved', 'Closed'];
 
 export default function AdminTicketDetail() {
   const { id } = useParams();
-  const dispatch = useDispatch();
   const { user } = useAuth();
 
   // Local UI state
@@ -36,33 +32,12 @@ export default function AdminTicketDetail() {
 
   // Server state via RTK Query
   const { data: ticket, isLoading, error } = useGetAdminTicketQuery(id, {
-    pollingInterval: 30000,
+    pollingInterval: 10000,
   });
   const [updateTicket] = useUpdateTicketMutation();
   const [replyTicket, { isLoading: sending }] = useReplyTicketMutation();
   const [generateDraft, { isLoading: drafting }] = useDraftTicketMutation();
   const [retryAI] = useRetryAIMutation();
-
-  // Realtime: invalidate the ticket cache when messages or ticket row change
-  useEffect(() => {
-    const ch = supabase
-      .channel(`admin-ticket-${id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'ticket_messages', filter: `ticket_id=eq.${id}` },
-        () => dispatch(bookleafApi.util.invalidateTags([{ type: 'Ticket', id }]))
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'tickets', filter: `id=eq.${id}` },
-        () =>
-          dispatch(
-            bookleafApi.util.invalidateTags([{ type: 'Ticket', id }, 'AdminQueue'])
-          )
-      )
-      .subscribe();
-    return () => supabase.removeChannel(ch);
-  }, [id, dispatch]);
 
   async function handleGenerateDraft() {
     setNotice(null);

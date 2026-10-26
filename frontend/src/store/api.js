@@ -2,26 +2,44 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const rawBaseQuery = fetchBaseQuery({
+  baseUrl: BASE,
+  credentials: 'include',
+  prepareHeaders: (headers) => {
+    headers.set('Content-Type', 'application/json');
+    return headers;
+  },
+});
+let refreshPromise;
+
+async function baseQuery(args, api, extraOptions) {
+  let result = await rawBaseQuery(args, api, extraOptions);
+  if (
+    result.error?.status === 401 &&
+    args.url !== '/api/auth/refresh' &&
+    args.url !== '/api/auth/login'
+  ) {
+    if (!refreshPromise) {
+      refreshPromise = rawBaseQuery(
+        { url: '/api/auth/refresh', method: 'POST' },
+        api,
+        extraOptions
+      ).finally(() => {
+        refreshPromise = null;
+      });
+    }
+    const refreshResult = await refreshPromise;
+    if (!refreshResult.error) result = await rawBaseQuery(args, api, extraOptions);
+    else if (refreshResult.error.status !== 401) result = refreshResult;
+  }
+  return result;
+}
 
 export const bookleafApi = createApi({
   reducerPath: 'bookleafApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: BASE,
-    prepareHeaders: (headers) => {
-      const token = localStorage.getItem('bl_token');
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-      headers.set('Content-Type', 'application/json');
-      return headers;
-    },
-  }),
-  tagTypes: ['Me', 'Book', 'Ticket', 'TicketList', 'AdminQueue', 'Stats'],
+  baseQuery,
+  tagTypes: ['Book', 'Ticket', 'TicketList', 'AdminQueue', 'Stats'],
   endpoints: (builder) => ({
-    // ---------- Auth ----------
-    getMe: builder.query({
-      query: () => '/api/auth/me',
-      providesTags: ['Me'],
-    }),
-
     // ---------- Author ----------
     getBooks: builder.query({
       query: () => '/api/books',
@@ -83,7 +101,6 @@ export const bookleafApi = createApi({
 });
 
 export const {
-  useGetMeQuery,
   useGetBooksQuery,
   useGetMyTicketsQuery,
   useGetTicketQuery,

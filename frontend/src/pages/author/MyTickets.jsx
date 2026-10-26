@@ -1,30 +1,10 @@
-import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { supabase } from '../../supabaseClient.js';
-import { useAuth } from '../../AuthContext.jsx';
-import { bookleafApi, useGetMyTicketsQuery } from '../../store/api.js';
+import { useGetMyTicketsQuery } from '../../store/api.js';
 
 export default function MyTickets() {
-  const dispatch = useDispatch();
-  const { user } = useAuth();
   const { data: tickets = [], isLoading, error } = useGetMyTicketsQuery(undefined, {
-    pollingInterval: 20000,   // fallback if Realtime drops
+    pollingInterval: 20000,
   });
-
-  // Realtime: any update to one of *this author's* tickets → invalidate the list.
-  useEffect(() => {
-    if (!user?.authorId) return;
-    const ch = supabase
-      .channel(`author-tickets-${user.authorId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tickets', filter: `author_id=eq.${user.authorId}` },
-        () => dispatch(bookleafApi.util.invalidateTags(['TicketList']))
-      )
-      .subscribe();
-    return () => supabase.removeChannel(ch);
-  }, [user?.authorId, dispatch]);
 
   if (isLoading) return <div style={{ color: '#64748b' }}>Loading tickets…</div>;
   if (error)
