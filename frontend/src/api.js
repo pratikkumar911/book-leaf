@@ -1,5 +1,5 @@
 // Auth-only helper. Server-state (books, tickets, admin) lives in src/store/api.js (RTK Query).
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:4000');
 let refreshPromise;
 
 async function refreshSession() {

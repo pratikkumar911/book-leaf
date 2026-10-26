@@ -24,6 +24,10 @@ npm install && npm run dev                # :5173
 
 If `GROQ_API_KEY` is unset, the app still runs — classification falls back to keyword rules, drafts fall back to BookLeaf-tone templates.
 
+## Vercel deployment
+
+The root `vercel.json` deploys `backend` and `frontend` as separate Vercel services in one project and on one domain. `/api/*` routes to Express; all other paths route to the Vite frontend. In production, the frontend uses same-origin `/api` requests. Configure the backend environment variables in Vercel: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `FRONTEND_ORIGIN` (the exact site origin, including `https://`), and optionally `GROQ_API_KEY`. Set `NODE_ENV=production` for production authentication cookies.
+
 ---
 
 ## Choices & Tradeoffs
